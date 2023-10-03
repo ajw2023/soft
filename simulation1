@@ -1,0 +1,8 @@
+import random
+import sys
+import numpy as np
+import hoomd
+from hoomd import md
+#hoomd.context.initialize("--mode=cpu --notice-level=1")
+cpu = hoomd.device.CPU()
+sim = hoomd.Simulation(device=cpu, seed=1)

@@ -6,5 +6,58 @@ from hoomd import md
 #hoomd.context.initialize("--mode=cpu --notice-level=1")
 cpu = hoomd.device.CPU()
 sim = hoomd.Simulation(device=cpu, seed=1)
+N = 8
+
+#system parameters
+snapshot = gsd.hoomd.Snapshot()
+snapshot.particles.N = N
+snapshot.particles.position = []
+#setting particle locations:
+center = [-1, 1, 0]
+dtheta = 2*np.pi / N
+particles = 1
+R = 1 #how to determine R? 
+def construct(center,snapshot):
+    for n in range(N):
+        particle_pos = [center[0] + R * np.cos(dtheta * (n + 1)), 
+                        center[1] + R * np.sin(dtheta * (n + 1)),
+                        0]
+        snapshot.particles.position.append(particle_pos)
+
+construct(center,snapshot)
+print(snapshot.particles.position)
+snapshot.particles.types = ['A']
+snapshot.particles.typeid = [0] * N
+snapshot.configuration.box = [20, 20, 0, 0, 0, 0]
+
+#set up bonds:
+# Connect particles with bonds.
+snapshot.bonds.N = N
+snapshot.bonds.types = ['A-A']
+snapshot.bonds.typeid = [0] * N
+snapshot.bonds.group = []
+for i in range(N-1):
+snapshot.bonds.group.append([i,i+1])
+snapshot.bonds.group.append([N-1, 0]) 
+print(snapshot.bonds.group)
+with gsd.hoomd.open(name='8particlering_2d.gsd', mode='wb') as f:
+    f.append(snapshot)
 
 
+sim.create_state_from_gsd(filename ='8particlering_2d.gsd')
+
+# Apply the harmonic potential on the bonds.
+harmonic = hoomd.md.bond.Harmonic()
+harmonic.params['A-A'] = dict(k=1, r0=1)
+
+
+brownian = hoomd.md.methods.Brownian(filter=hoomd.filter.All(), kT=1)
+integrator = hoomd.md.Integrator(dt=0.001, methods=[brownian],
+forces=[harmonic])
+sim.operations.integrator = integrator
+gsd_writer = hoomd.write.GSD(filename='periodicring_2d.gsd',
+                             trigger=hoomd.trigger.Periodic(1000),
+                             mode='wb')
+sim.operations.writers.append(gsd_writer)
+
+sim.run(10000)
